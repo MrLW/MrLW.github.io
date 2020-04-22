@@ -1,0 +1,106 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content=""><title>浅谈NodeJS | 规矩之内,皆是自由</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/normalize/8.0.1/normalize.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/1.0.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/1.0.0/grids-responsive-min.css"><link rel="stylesheet" href="//lib.baomitu.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//lib.baomitu.com/jquery/3.4.0/jquery.min.js"></script><link rel="icon" mask="" sizes="any" href="/favicon.ico"><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><meta name="generator" content="Hexo 4.2.0"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">浅谈NodeJS</h1><a id="logo" href="/.">规矩之内,皆是自由</a><p class="description"></p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">浅谈NodeJS</h1><div class="post-meta">Feb 29, 2020<span> | </span><span class="category"><a href="/categories/NodeJS/">NodeJS</a></span><span class="post-time"><span class="post-meta-item-text"> | </span><span class="post-meta-item-icon"><i class="fa fa-keyboard-o"></i><span class="post-count"> 1.7k</span><span class="post-meta-item-text"> 字</span></span></span><span class="post-time"> | <span class="post-meta-item-icon"><i class="fa fa-hourglass-half"></i><span class="post-count"> 6</span><span class="post-meta-item-text"> 分钟</span></span></span></div><div class="post-content"><h1 id="一、特点"><a href="#一、特点" class="headerlink" title="一、特点"></a>一、特点</h1><ul>
+<li>单线程</li>
+<li>非阻塞（libuv）</li>
+<li>事件驱动</li>
+</ul>
+<img src="/2020/02/29/%E6%B5%85%E8%B0%88NodeJS/1582964399107.jpg" alt="1582964399107" style="zoom:50%;">
+
+<h2 id="1、阻塞-amp-非阻塞"><a href="#1、阻塞-amp-非阻塞" class="headerlink" title="1、阻塞&amp;非阻塞"></a>1、阻塞&amp;非阻塞</h2><p>􏵈操作系统对于IO只有两种方式：阻塞和非阻塞</p>
+<h3 id="1-1、阻塞IO"><a href="#1-1、阻塞IO" class="headerlink" title="1.1、阻塞IO"></a>1.1、阻塞IO</h3><p>调用之后一定要等到系统内核完成所有的操作之后才结束，因此它的缺点：CPU等待IO，处理能力得不到充分利用。</p>
+<h3 id="1-2、非阻塞IO"><a href="#1-2、非阻塞IO" class="headerlink" title="1.2、非阻塞IO"></a>1.2、非阻塞IO</h3><p>为了解决阻塞IO带来的一些问题，内核提供了非阻塞IO，非阻塞IO的差别是调用之后会立即返回。缺点：非阻塞IO立即返回并不是业务层期望的数据，而仅仅是调用的状态，为了获取完整的数据，应用程序需要重复调用IO操作确认，即轮询。</p>
+<h3 id="1-3、轮询"><a href="#1-3、轮询" class="headerlink" title="1.3、轮询"></a>1.3、轮询</h3><p>常见的三种轮询方式：select、poll和epoll。</p>
+<p><strong>1、select</strong></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">select</span><span class="params">(<span class="keyword">int</span> nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds, struct timeval *timeout)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>参数解释</p>
+<ul>
+<li>nfds:被监听的文件描述符总数</li>
+<li>*readfds writefds exceptfds : 可读、可写、异常事件的accept到对应的文件描述符集合</li>
+<li>*fd_set：是一个整形数组，每一个元素的每一位来表示每一个文件描述符是否有相应的事件发生。（0没有1有）数组的长度由FD_SETSIZE决定</li>
+<li>timeout：轮询的时间片</li>
+</ul>
+<p>通过设置或者检查存放fd(文件标识符)标志位的数据结构进行处理（select对应于内核的sys_select调用）：1.将第2、3、4个参数指向的fd_set拷贝到内核；2.对每个被set对描述符调用进行poll，并记录在临时结果中(fdset)</p>
+<p>缺点是：</p>
+<ul>
+<li>单个进程的fd监视数量有限</li>
+<li>需要维护一个存放fd的数据结构，这样会使得用户空间和内核空间在传递该结构时复制开销大</li>
+<li>每次select操作需要初始化fdset，因为select的第2、3、4参数既是输入参数也是输出参数，在内核中会被修改</li>
+<li>socker的扫描是线性扫描</li>
+</ul>
+<img src="/2020/02/29/%E6%B5%85%E8%B0%88NodeJS/1583467664428.jpg" alt="1583467664428" style="zoom:100%;">
+
+<p><strong>2、poll</strong></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">poll</span><span class="params">(struct pollfd *fds, <span class="keyword">nfds_t</span> nfds, <span class="keyword">int</span> timeout)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>poll和select的实现机制类似，对应内核的sys_poll，但是传递的是pollfd数组，接着对pollfd数组进行poll。</p>
+<p>优点：</p>
+<ul>
+<li>pollfd数组只需要被初始化一次，因为pollfd的events字段和revents分别用于标示关注的事件和发生的事件</li>
+<li>对描述符个数没有限制，poll通过一个pollfd数组向内核传递需要关注的事件</li>
+</ul>
+<img src="/2020/02/29/%E6%B5%85%E8%B0%88NodeJS/1583468251572.jpg" alt="1583468251572" style="zoom: 100%;">
+
+<p><strong>3、epoll</strong></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">epoll_wait</span><span class="params">(<span class="keyword">int</span> epfd, struct epoll_event *events, <span class="keyword">int</span> maxevents, <span class="keyword">int</span> timeout)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>该方案是Linux效率最高的IO事件通知机制。在进行轮询的时候如果没有检查到IO事件，将会进行休眠，直到有事件将其唤醒。它是真实利用了执行回调和事件通知的机制，充分利用CPU，因此效率比较高。</p>
+<img src="/2020/02/29/%E6%B5%85%E8%B0%88NodeJS/1583470065635.jpg" alt="1583470065635" style="zoom:100%;">
+
+<p><strong>4、总结</strong></p>
+<p>总的来说，轮询技术满足非阻塞IO确保完整数据获取的需求，当时对于应用程序来说，它仍然是同步，因为它必须等待IO完全返回。等待IO期间，CPU要么遍历文件描述符的状态，要没用于休眠等待事件发生。</p>
+<h2 id="2、同步-amp-异步"><a href="#2、同步-amp-异步" class="headerlink" title="2、同步&amp;异步"></a>2、同步&amp;异步</h2><h3 id="2-1、同步IO"><a href="#2-1、同步IO" class="headerlink" title="2.1、同步IO"></a>2.1、同步IO</h3><p>同步IO比较简单，就是简单的顺序执行，其实<strong>阻塞和非阻塞都属于同步IO</strong>。</p>
+<h3 id="2-2、异步IO"><a href="#2-2、异步IO" class="headerlink" title="2.2、异步IO"></a>2.2、异步IO</h3><p>这里拿Node举例,在Node中,我们知道异步是它的一大特色,那它到底有哪些好处呢?</p>
+<p><strong>好处</strong></p>
+<ul>
+<li><p>从请求时间上来说,假设某个资源需要获取a,b两个地方的资源,a资源需要时间M毫秒,b资源需要时间N毫秒,此时:同步需要sum(M,N),异步需要max(M,N)</p>
+</li>
+<li><p>从资源消耗来说,异步远离阻塞,单线程避免了多线程容易出现的死锁等各种异常情况</p>
+</li>
+</ul>
+<p>我们期待的异步是：当我们应用程序发起阻塞请求，不需要轮询技术，直接处理下一个任务；当阻塞请求完成之后，将数据传递到应用程序。在<strong>Linux下存在这种异步IO即AIO</strong>。</p>
+<p>如果我们自己去实现异步IO，则可以通过<strong>线程池+轮询技术</strong>来实现数据的获取。例如现在应用程序发起了一个阻塞请求，我们可以如下处理：</p>
+<ol>
+<li><p>让a线程利用轮询技术去处理阻塞调用</p>
+</li>
+<li><p>让b线程去执行计算处理</p>
+</li>
+<li><p>当a线程的处理结果通过线程间共享发送给b</p>
+</li>
+</ol>
+<p>这样，就完成了异步IO。</p>
+<img src="/2020/02/29/%E6%B5%85%E8%B0%88NodeJS/1582974608595.jpg" alt="1582974608595" style="zoom:50%;">
+
+<p>异步IO实现：事件循环、观察者、请求对象、IO线程池这四者共同构成Node异步IO模型的基本要素。</p>
+<img src="/2020/02/29/%E6%B5%85%E8%B0%88NodeJS/1582975312894.jpg" alt="1582975312894" style="zoom:50%;">
+
+
+
+<h2 id="3、小结"><a href="#3、小结" class="headerlink" title="3、小结"></a>3、小结</h2><p><strong>select，poll，epoll本质上都是同步I/O，因为他们都需要在读写事件就绪后自己负责进行读写，也就是说这个读写过程是阻塞的</strong>，而异步I/O则无需自己负责进行读写，异步I/O的实现会负责把数据从内核拷贝到用户空间。</p>
+<h1 id="二、Process-nextTick-和setImmediate-区别"><a href="#二、Process-nextTick-和setImmediate-区别" class="headerlink" title="二、Process.nextTick()和setImmediate() 区别"></a>二、Process.nextTick()和setImmediate() 区别</h1><p><strong>1、nextTick() 中的回调优先级高于setImmediate</strong>()</p>
+<p>事件循环对观察者的检查是有先后顺序，nextTick()属于idle观察者，setImmediate()属于check观察者。在每一个循环检查中，idle观察者先于io观察者，io该观察者先于check观察者</p>
+<p><strong>2、nextTick()回调函数存在数组中，setImmediate()存在链表中</strong></p>
+<p><strong>3、nextTick()在每次循环中都将数组中的回调函数全部执行完，而setImmediate()每次循环执行链表中的同一个回调函数</strong></p>
+<img src="/2020/02/29/%E6%B5%85%E8%B0%88NodeJS/1582987370005.jpg" alt="1582987370005" style="zoom:50%;">
+
+<p>上述的五个阶段都是按照先进先出的规则执行回调函数。按顺序执行每个阶段的回调函数队列，直至队列为空或是该阶段执行的回调函数达到该阶段所允许一次执行回调函数的最大限制后，才会将操作权移交给下一阶段。</p>
+<h1 id="三、浏览器-amp-Node的EventLoop"><a href="#三、浏览器-amp-Node的EventLoop" class="headerlink" title="三、浏览器&amp;Node的EventLoop"></a>三、浏览器&amp;Node的EventLoop</h1><h2 id="3-1-浏览器"><a href="#3-1-浏览器" class="headerlink" title="3.1 浏览器"></a>3.1 浏览器</h2><p><strong>先执行一个宏任务，再执行一队微任务</strong></p>
+<h2 id="3-2-Node"><a href="#3-2-Node" class="headerlink" title="3.2 Node"></a>3.2 Node</h2><h2 id="3-3-总结"><a href="#3-3-总结" class="headerlink" title="3.3 总结"></a>3.3 总结</h2><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">setTimeout(<span class="function"><span class="params">()</span>=&gt;</span>&#123;</span><br><span class="line">    <span class="built_in">console</span>.log(<span class="string">'timer1'</span>)</span><br><span class="line">    <span class="built_in">Promise</span>.resolve().then(<span class="function"><span class="keyword">function</span>(<span class="params"></span>) </span>&#123;</span><br><span class="line">        <span class="built_in">console</span>.log(<span class="string">'promise1'</span>)</span><br><span class="line">    &#125;)</span><br><span class="line">&#125;, <span class="number">0</span>)</span><br><span class="line">setTimeout(<span class="function"><span class="params">()</span>=&gt;</span>&#123;</span><br><span class="line">    <span class="built_in">console</span>.log(<span class="string">'timer2'</span>)</span><br><span class="line">    <span class="built_in">Promise</span>.resolve().then(<span class="function"><span class="keyword">function</span>(<span class="params"></span>) </span>&#123;</span><br><span class="line">        <span class="built_in">console</span>.log(<span class="string">'promise2'</span>)</span><br><span class="line">    &#125;)</span><br><span class="line">&#125;, <span class="number">0</span>)</span><br></pre></td></tr></table></figure>
+
+
+
+<ul>
+<li>Node端，microtask 在事件循环的各个阶段之间执行<ul>
+<li>node版本在11之前：<ul>
+<li>如果是第二个定时器还未在完成队列中，最后的结果为<code>timer1=&gt;promise1=&gt;timer2=&gt;promise2</code></li>
+<li>如果是第二个定时器已经在完成队列中，则最后的结果为<code>timer1=&gt;timer2=&gt;promise1=&gt;promise2</code>(下文过程解释基于这种情况下)</li>
+</ul>
+</li>
+<li>node版本在11之后：和浏览器端一直，运行一个宏任务，将立即运行所有的微任务队列</li>
+</ul>
+</li>
+<li>浏览器端，microtask 在事件循环的 macrotask 执行完之后执行</li>
+</ul>
+<h1 id="三、不适合用Node的场景"><a href="#三、不适合用Node的场景" class="headerlink" title="三、不适合用Node的场景"></a>三、不适合用Node的场景</h1><blockquote>
+<p>Node不适合处理大量CPU比较密集的运算。</p>
+</blockquote>
+</div><div class="tags"></div><div class="post-nav"><a class="pre" href="/2020/03/01/Node%E9%9D%A2%E8%AF%95%E6%80%BB%E7%BB%931/">Node面试总结1</a><a class="next" href="/2020/02/28/redis%E9%87%8D%E9%9A%BE%E7%82%B9%E6%A2%B3%E7%90%86/">redis 重难点梳理</a></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form class="search-form" action="//www.baidu.com/baidu" method="get" accept-charset="utf-8" target="_blank"><input type="search" name="word" maxlength="20" placeholder="Search"/><input type="hidden" name="si" value="http://yoursite.com"/><input name="tn" type="hidden" value="bds"/><input name="cl" type="hidden" value="3"/><input name="ct" type="hidden" value="2097152"/><input name="s" type="hidden" value="on"/></form></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/NodeJS/">NodeJS</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/dev-ops/">dev&ops</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/lvs/">lvs</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%BD%91%E7%BB%9C%E5%8D%8F%E8%AE%AE/">网络协议</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/LVS/" style="font-size: 15px;">LVS</a> <a href="/tags/Linux/" style="font-size: 15px;">Linux</a> <a href="/tags/%E5%86%85%E6%A0%B8/" style="font-size: 15px;">内核</a> <a href="/tags/js-%E4%BD%9C%E7%94%A8%E5%9F%9F/" style="font-size: 15px;">js - 作用域</a> <a href="/tags/redis/" style="font-size: 15px;">redis</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/typescript/" style="font-size: 15px;">typescript</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2020/04/21/ts%E9%87%8D%E9%9A%BE%E7%82%B9%E6%A2%B3%E7%90%86/">ts重难点梳理</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/04/20/js/">js重难点梳理</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/09/tcp-ip%E8%AF%A6%E8%A7%A3-%E6%A6%82%E8%BF%B0/">tcp/ip详解-概述</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/07/mysql-%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/">mysql-存储引擎</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/05/MFS-%E5%85%A5%E9%97%A8/">MFS-入门</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/01/Node%E9%9D%A2%E8%AF%95%E6%80%BB%E7%BB%931/">Node面试总结1</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/02/29/%E6%B5%85%E8%B0%88NodeJS/">浅谈NodeJS</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/02/28/redis%E9%87%8D%E9%9A%BE%E7%82%B9%E6%A2%B3%E7%90%86/">redis 重难点梳理</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/02/27/lvs-nat/">lvs-nat</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/02/27/lvs-dr-keepalived/">lvs-dr-keepalived</a></li></ul></div></div></div><div class="pure-u-1 pure-u-md-3-4"></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css"><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description" content=""><title>redis 重难点梳理 | 规矩之内,皆是自由</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/normalize/8.0.1/normalize.min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/1.0.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/pure/1.0.0/grids-responsive-min.css"><link rel="stylesheet" href="//lib.baomitu.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//lib.baomitu.com/jquery/3.4.0/jquery.min.js"></script><link rel="icon" mask="" sizes="any" href="/favicon.ico"><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><meta name="generator" content="Hexo 4.2.0"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">redis 重难点梳理</h1><a id="logo" href="/.">规矩之内,皆是自由</a><p class="description"></p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a><a href="/atom.xml"><i class="fa fa-rss"> 订阅</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">redis 重难点梳理</h1><div class="post-meta">Feb 28, 2020<span class="post-time"><span class="post-meta-item-text"> | </span><span class="post-meta-item-icon"><i class="fa fa-keyboard-o"></i><span class="post-count"> 602</span><span class="post-meta-item-text"> 字</span></span></span><span class="post-time"> | <span class="post-meta-item-icon"><i class="fa fa-hourglass-half"></i><span class="post-count"> 2</span><span class="post-meta-item-text"> 分钟</span></span></span></div><div class="post-content"><h2 id="一、redis中的一些概念"><a href="#一、redis中的一些概念" class="headerlink" title="一、redis中的一些概念"></a>一、redis中的一些概念</h2><p><strong>1、缓存穿透</strong></p>
+<blockquote>
+<p> 定义：请求一条数据库压根就没有的数据，也就是每次请求都会落在数据库中</p>
+</blockquote>
+<p>解决：</p>
+<ul>
+<li>缓存null值 并设置过期时间</li>
+<li>布隆过滤器：将所有可能存在的数据哈希到一个足够大的bitmap中，一个一定不存在的数据会被 这个bitmap拦截掉，从而避免了对底层存储系统的查询压力</li>
+</ul>
+<p><strong>2、缓存击穿</strong></p>
+<blockquote>
+<p>定义：大量的请求同时查询一个 key 时，此时这个key正好失效了，就会导致大量的请求都打到数据库上面去。这种现象我们称为缓存击穿</p>
+</blockquote>
+<ul>
+<li>使用互斥锁（SETNX）</li>
+</ul>
+<p><strong>3、缓存雪崩</strong></p>
+<blockquote>
+<p>定义：缓存雪崩的情况是说，当某一时刻发生大规模的缓存失效的情况，比如你的缓存服务宕机了，会有大量的请求进来直接打到DB上面。结果就是DB 撑不住，挂掉</p>
+</blockquote>
+<p>解决：</p>
+<ul>
+<li><p>搭建缓存集群</p>
+</li>
+<li><p>数据预热</p>
+</li>
+<li><p>本地缓存 + Hystrix 限流&amp;降级</p>
+</li>
+<li><p>redis持久化机制 </p>
+</li>
+</ul>
+<p><strong>4、热点数据过期时间</strong></p>
+<blockquote>
+<p>定义：对于一些热点的数据来说，当缓存失效以后会存在大量的请求过来，然后打到数据库去，从而可能导致数据库崩溃的情况</p>
+</blockquote>
+<p>解决：</p>
+<ul>
+<li><p>设置不同的过期时间</p>
+</li>
+<li><p>互斥锁</p>
+</li>
+</ul>
+<h2 id="二、redis实现分布式锁"><a href="#二、redis实现分布式锁" class="headerlink" title="二、redis实现分布式锁"></a>二、redis实现分布式锁</h2><p><strong>1、加锁</strong></p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">SET lock_key random_value NX PX <span class="number">5000</span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>lock_key：key</li>
+<li>random_value：客户端唯一标识</li>
+<li>NX：不存在则加锁</li>
+<li>PX：设置过期时间</li>
+<li>5000：过期时间</li>
+</ul>
+<p><strong>2、释放</strong></p>
+<p>释放锁使用lua脚本，保证原子性</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> redis.call(<span class="string">'get'</span>,KEYS[<span class="number">1</span>]) == ARGV[<span class="number">1</span>] <span class="keyword">then</span> </span><br><span class="line">   <span class="keyword">return</span> redis.call(<span class="string">'del'</span>,KEYS[<span class="number">1</span>]) </span><br><span class="line"><span class="keyword">else</span></span><br><span class="line">   <span class="keyword">return</span> <span class="number">0</span> </span><br><span class="line"><span class="keyword">end</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="三、redis发布订阅"><a href="#三、redis发布订阅" class="headerlink" title="三、redis发布订阅"></a>三、redis发布订阅</h2><p>redis的发布订阅实现包括三个概念：发布者、订阅者和chanel。（channel类似于AMQP的主题）</p>
+<p>应用：Keyspace Notification。</p>
+<p>当redis的key被删除时，redis会发送两种不同的事件</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">PUBLISH __keyspace@0__:mykey del</span><br><span class="line">PUBLISH __keyevent@0__:del mykey</span><br></pre></td></tr></table></figure>
+
+<p>因此我们只需要订阅 __keyevent即可</p>
+<h2 id="四、redis和mq的一些比较"><a href="#四、redis和mq的一些比较" class="headerlink" title="四、redis和mq的一些比较"></a>四、redis和mq的一些比较</h2><p>redis主要还是一个key-value的缓存数据库，侧重点在缓存上，作消息队列主要是使用发布订阅方式，但是也有很多缺点，如：</p>
+<ul>
+<li>redis没有ack机制，不能保证消息是否真的被处理</li>
+<li>redis的消息不会被存储</li>
+</ul>
+<h2 id="五、redis持久化机制"><a href="#五、redis持久化机制" class="headerlink" title="五、redis持久化机制"></a>五、redis持久化机制</h2></div><div class="tags"><a href="/tags/redis/">redis</a></div><div class="post-nav"><a class="pre" href="/2020/02/29/%E6%B5%85%E8%B0%88NodeJS/">浅谈NodeJS</a><a class="next" href="/2020/02/27/lvs-nat/">lvs-nat</a></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><form class="search-form" action="//www.baidu.com/baidu" method="get" accept-charset="utf-8" target="_blank"><input type="search" name="word" maxlength="20" placeholder="Search"/><input type="hidden" name="si" value="http://yoursite.com"/><input name="tn" type="hidden" value="bds"/><input name="cl" type="hidden" value="3"/><input name="ct" type="hidden" value="2097152"/><input name="s" type="hidden" value="on"/></form></div><div class="widget"><div class="widget-title"><i class="fa fa-folder-o"> 分类</i></div><ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/NodeJS/">NodeJS</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/dev-ops/">dev&ops</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/lvs/">lvs</a></li><li class="category-list-item"><a class="category-list-link" href="/categories/%E7%BD%91%E7%BB%9C%E5%8D%8F%E8%AE%AE/">网络协议</a></li></ul></div><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/LVS/" style="font-size: 15px;">LVS</a> <a href="/tags/Linux/" style="font-size: 15px;">Linux</a> <a href="/tags/%E5%86%85%E6%A0%B8/" style="font-size: 15px;">内核</a> <a href="/tags/js-%E4%BD%9C%E7%94%A8%E5%9F%9F/" style="font-size: 15px;">js - 作用域</a> <a href="/tags/redis/" style="font-size: 15px;">redis</a> <a href="/tags/tcp/" style="font-size: 15px;">tcp</a> <a href="/tags/typescript/" style="font-size: 15px;">typescript</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2020/04/21/ts%E9%87%8D%E9%9A%BE%E7%82%B9%E6%A2%B3%E7%90%86/">ts重难点梳理</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/04/20/js/">js重难点梳理</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/09/tcp-ip%E8%AF%A6%E8%A7%A3-%E6%A6%82%E8%BF%B0/">tcp/ip详解-概述</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/07/mysql-%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/">mysql-存储引擎</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/05/MFS-%E5%85%A5%E9%97%A8/">MFS-入门</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/03/01/Node%E9%9D%A2%E8%AF%95%E6%80%BB%E7%BB%931/">Node面试总结1</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/02/29/%E6%B5%85%E8%B0%88NodeJS/">浅谈NodeJS</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/02/28/redis%E9%87%8D%E9%9A%BE%E7%82%B9%E6%A2%B3%E7%90%86/">redis 重难点梳理</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/02/27/lvs-nat/">lvs-nat</a></li><li class="post-list-item"><a class="post-list-link" href="/2020/02/27/lvs-dr-keepalived/">lvs-dr-keepalived</a></li></ul></div></div></div><div class="pure-u-1 pure-u-md-3-4"></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="//lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css"><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
